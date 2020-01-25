@@ -36,11 +36,11 @@
     <OutputPath>bin\Release\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
-    <WarningLevel>4</WarningLevel>
+    <WarningLevel>3</WarningLevel>
     <DocumentationFile>bin\Release\i18n.XML</DocumentationFile>
     <NoWarn>1591 1573</NoWarn>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup>
@@ -50,8 +50,8 @@
     <AssemblyOriginatorKeyFile>Key.snk</AssemblyOriginatorKeyFile>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="CachingFramework.Redis, Version=11.1.0.0, Culture=neutral, PublicKeyToken=3982df00cecbd320, processorArchitecture=MSIL">
-      <HintPath>..\packages\CachingFramework.Redis.11.1.0\lib\net461\CachingFramework.Redis.dll</HintPath>
+    <Reference Include="CachingFramework.Redis, Version=10.0.4.0, Culture=neutral, PublicKeyToken=3982df00cecbd320, processorArchitecture=MSIL">
+      <HintPath>..\packages\CachingFramework.Redis.10.0.4\lib\net461\CachingFramework.Redis.dll</HintPath>
     </Reference>
     <Reference Include="Newtonsoft.Json, Version=12.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
       <HintPath>..\packages\Newtonsoft.Json.12.0.3\lib\net45\Newtonsoft.Json.dll</HintPath>

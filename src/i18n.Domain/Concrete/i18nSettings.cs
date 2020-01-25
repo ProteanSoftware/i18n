@@ -2,10 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using i18n.Domain.Abstract;
-using i18n.Helpers;
 
 namespace i18n.Domain.Concrete
 {
@@ -21,7 +18,8 @@ namespace i18n.Domain.Concrete
             _settingService = settings;
         }
 
-        public String ProjectDirectory {
+        public String ProjectDirectory
+        {
             get { return Path.GetDirectoryName(_settingService.GetConfigFileLocation()); }
         }
 
@@ -122,7 +120,7 @@ namespace i18n.Domain.Concrete
                 string path;
                 if (setting != null)
                 {
-                    path = setting;    
+                    path = setting;
                 }
                 else
                 {
@@ -189,7 +187,7 @@ namespace i18n.Domain.Concrete
         #region White list
 
         private const string _whiteListDefault = "*.cs;*.cshtml";
-        
+
         /// <summary>
         /// Describes zero or more file specifications which in turn specify
         /// the source files to be targeted by FileNuggetParser.
@@ -247,7 +245,7 @@ namespace i18n.Domain.Concrete
         {
             get
             {
-                if(_cached_blackList != null)
+                if (_cached_blackList != null)
                 {
                     return _cached_blackList;
                 }
@@ -468,7 +466,7 @@ namespace i18n.Domain.Concrete
         }
 
         #endregion
-        
+
         #region DirectoriesToScan
 
         private const string _directoriesToScan = ".";
@@ -519,7 +517,7 @@ namespace i18n.Domain.Concrete
         }
 
         #endregion
-        
+
         #region Available Languages
 
         //If empty string is returned the repository can if it choses enumerate languages in a different way (like enumerating directories in the case of PO files)
@@ -558,12 +556,14 @@ namespace i18n.Domain.Concrete
             {
                 // NB: this is not particularly thread-safe, but not seen as dangerous
                 // if done concurrently as modification is one-way.
-                if (_cached_MessageContextEnabledFromComment != null) {
-                    return _cached_MessageContextEnabledFromComment.Value; }
+                if (_cached_MessageContextEnabledFromComment != null)
+                {
+                    return _cached_MessageContextEnabledFromComment.Value;
+                }
 
                 string prefixedString = GetPrefixedString("MessageContextEnabledFromComment");
                 string setting = _settingService.GetSetting(prefixedString);
-                bool result = !string.IsNullOrEmpty(setting) &&  setting == "true";
+                bool result = !string.IsNullOrEmpty(setting) && setting == "true";
                 _cached_MessageContextEnabledFromComment = result;
                 return result;
             }

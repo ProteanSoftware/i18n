@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.Threading;
 using CachingFramework.Redis;
@@ -15,7 +16,7 @@ namespace i18n
         private Lazy<TextLocalizer> textLocalizer;
         private Lazy<NuggetLocalizer> nuggetLocalizer;
 
-        public DefaultRootServices(string environment, RedisContext redisContext)
+        public DefaultRootServices(string environment, RedisContext redisContext, IDictionary<string, string> config)
         {
             if (string.IsNullOrEmpty(environment))
             {
@@ -29,9 +30,10 @@ namespace i18n
 
             // Use Lazy to delay the creation of objects to when a request is being processed.
             // When initializing the app thehi may throw "Request is not available in this context" from WebConfigService
-            translationRepository = new Lazy<POTranslationRepository>(() => new POTranslationRepository(new i18nSettings(new DictionaryConfigSettingService())));
-            textLocalizer = new Lazy<TextLocalizer>(() => new TextLocalizer(environment, redisContext, new i18nSettings(new DictionaryConfigSettingService()), TranslationRepositoryForApp));
-            nuggetLocalizer = new Lazy<NuggetLocalizer>(() => new NuggetLocalizer(new i18nSettings(new DictionaryConfigSettingService()), TextLocalizerForApp));
+            var settings = new i18nSettings(new DictionaryConfigSettingService(config));
+            translationRepository = new Lazy<POTranslationRepository>(() => new POTranslationRepository(settings));
+            textLocalizer = new Lazy<TextLocalizer>(() => new TextLocalizer(environment, redisContext, settings, TranslationRepositoryForApp));
+            nuggetLocalizer = new Lazy<NuggetLocalizer>(() => new NuggetLocalizer(settings, TextLocalizerForApp));
         }
 
         #region [IRootServices]
@@ -250,7 +252,7 @@ namespace i18n
         /// </remarks>
         public string AsyncPostbackTypesToTranslate = "updatePanel,scriptStartupBlock,pageTitle";
 
-        public LocalizedApplication(IRootServices i_RootServices = null, string environment = null, RedisContext redisContext = null)
+        public LocalizedApplication(string environment, RedisContext redisContext, IDictionary<string, string> config)
         {
 
             // Default settings.
@@ -266,7 +268,7 @@ namespace i18n
 
             // Use default package of root services.
             // Host app may override this.
-            RootServices = i_RootServices ?? new DefaultRootServices(environment, redisContext);
+            RootServices = new DefaultRootServices(environment, redisContext, config);
 
             // Install default handler for Set-PAL event.
             // The default handler applies the setting to both the CurrentCulture and CurrentUICulture
@@ -280,16 +282,10 @@ namespace i18n
             };
         }
 
-        private static LocalizedApplication current;
-
         /// <summary>
         /// Instance of the this LocalizedApplication class for the current AppDomain.
         /// </summary>
-        public static LocalizedApplication Current
-        {
-            get { return current ?? (current = new LocalizedApplication()); }
-            set { current = value; }
-        }
+        public static LocalizedApplication Current { get; set; }
 
         /// <summary>
         /// This object relays its implementaion of IRootServices onto the object set here.
