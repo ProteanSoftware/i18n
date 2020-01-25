@@ -1,11 +1,8 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Collections.Concurrent;
-using System.Globalization;
-using System.Linq;
-using System.Text;
-using System.Text.RegularExpressions;
 using System.Diagnostics;
+using System.Globalization;
+using System.Text.RegularExpressions;
 using i18n.Helpers;
 
 namespace i18n
@@ -155,6 +152,16 @@ namespace i18n
         /// the language suitable for user display, otherwise it is the language tag string.
         /// </summary>
         public string NativeNameTitleCase { get; private set; }
+
+        /// <summary>
+        /// Constructor for deserialization
+        /// </summary>
+        public LanguageTag()
+        {
+
+        }
+
+
         /// <summary>
         /// Constructs a new instance based on a language tag string.
         /// If successful, then the Language property is set to a valid language subtag.

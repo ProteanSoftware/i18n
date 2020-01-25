@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Reflection;
 using i18n.Domain.Abstract;
 
 namespace i18n.Domain.Concrete
@@ -12,7 +13,7 @@ namespace i18n.Domain.Concrete
             this.config = config ?? new Dictionary<string, string>();
         }
 
-        public override string GetConfigFileLocation() => null;
+        public override string GetConfigFileLocation() => Assembly.GetExecutingAssembly().Location;
 
         public override string GetSetting(string key)
         {

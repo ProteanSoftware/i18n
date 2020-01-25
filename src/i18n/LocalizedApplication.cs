@@ -254,7 +254,6 @@ namespace i18n
 
         public LocalizedApplication(string environment, RedisContext redisContext, IDictionary<string, string> config)
         {
-
             // Default settings.
             DefaultLanguage = ("en");
             CookieName = "i18n.langtag";
