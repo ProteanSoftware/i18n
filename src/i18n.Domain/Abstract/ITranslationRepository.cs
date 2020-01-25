@@ -1,13 +1,12 @@
 ﻿using System.Collections.Generic;
-using System.Web.Caching;
-    // TODO: this above dependency is unfortunate and should be removed.
-    // That would involve a reworking of the design for notifications
-    // of languages being modified.
-    // GetCacheDependencyForSingleLanguage could be replaced with an event in the Translation
-    // object which is signalled when that particular translation becomes dirty.
-    // Like wise GetCacheDependencyForAllLanguages could return just an event.
-    // It is then down to the client to wrap these events in a custom CacheDependency
-    // that monitors the event.
+// TODO: this above dependency is unfortunate and should be removed.
+// That would involve a reworking of the design for notifications
+// of languages being modified.
+// GetCacheDependencyForSingleLanguage could be replaced with an event in the Translation
+// object which is signalled when that particular translation becomes dirty.
+// Like wise GetCacheDependencyForAllLanguages could return just an event.
+// It is then down to the client to wrap these events in a custom CacheDependency
+// that monitors the event.
 using i18n.Domain.Entities;
 
 namespace i18n.Domain.Abstract
@@ -51,20 +50,5 @@ namespace i18n.Domain.Abstract
         /// <param name="items">All template items to save, in a dictionary indexed by their id</param>
         /// <returns>True if the template have been saved</returns>
         bool SaveTemplate(IDictionary<string, TemplateItem> items);
-
-        /// <summary>
-        /// Returns a CacheDependency for a language. This can be a subclass such as <see cref="SqlCacheDependency"/>
-        /// This is used to remove caches when a languages has been updated
-        /// </summary>
-        /// <param name="langtag">The language tag to get a dependency for</param>
-        /// <returns>The dependency for the language sent in.</returns>
-        CacheDependency GetCacheDependencyForSingleLanguage(string langtag);  
-
-        /// <summary>
-        /// Returns a CacheDependecy for all languages, that is to say if there has been an additon or removal of one or more languages.
-        /// Just like <see cref="GetCacheDependencyForSingleLanguage(string)"/> we can return a subclass of CacheDependency as required.
-        /// </summary>
-        /// <returns>The cache dependency for the list of languages.</returns>
-        CacheDependency GetCacheDependencyForAllLanguages();
     }
 }

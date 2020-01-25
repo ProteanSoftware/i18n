@@ -10,9 +10,7 @@ namespace i18n
     public interface IRootServices
     {
         ITranslationRepository TranslationRepositoryForApp { get; }
-        IUrlLocalizer UrlLocalizerForApp { get; }
         ITextLocalizer TextLocalizerForApp { get; }
-        IEarlyUrlLocalizer EarlyUrlLocalizerForApp { get; }
         INuggetLocalizer NuggetLocalizerForApp { get; }
     }
 }

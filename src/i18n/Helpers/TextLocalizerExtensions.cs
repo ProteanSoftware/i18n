@@ -44,10 +44,10 @@
                 return message; }
            // 2.
             if (allowLookupWithHtmlDecodedMsgId) {
-                string msgIdHtmlDecoded = System.Web.HttpUtility.HtmlDecode(msgid);
+                string msgIdHtmlDecoded = System.Net.WebUtility.HtmlDecode(msgid);
                 message = textLocalizer.GetText(
                     msgIdHtmlDecoded, 
-                    System.Web.HttpUtility.HtmlDecode(msgcomment), 
+                    System.Net.WebUtility.HtmlDecode(msgcomment), 
                     languages,
                     out o_langtag,
                     maxPasses);

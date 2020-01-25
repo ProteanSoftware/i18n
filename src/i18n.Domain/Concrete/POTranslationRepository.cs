@@ -6,8 +6,6 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
-using System.Web.Caching;
 using i18n.Domain.Abstract;
 using i18n.Domain.Entities;
 using i18n.Helpers;
@@ -116,19 +114,6 @@ namespace i18n.Domain.Concrete
 
             //did not exist in settings nor as file, we return false
             return false;
-        }
-
-        public CacheDependency GetCacheDependencyForSingleLanguage(string langtag)
-        {
-            var path = GetPathForLanguage(langtag);
-            if (!File.Exists(path)) {
-                return null; }
-            return new CacheDependency(path);
-        }
-
-        public CacheDependency GetCacheDependencyForAllLanguages()
-        {
-            return new FsCacheDependency(GetAbsoluteLocaleDir());
         }
 
         #endregion

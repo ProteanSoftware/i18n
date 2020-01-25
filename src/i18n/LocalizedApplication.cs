@@ -1,9 +1,10 @@
 using System;
-using System.Threading;
 using System.Text.RegularExpressions;
-using i18n.Helpers;
+using System.Threading;
+using CachingFramework.Redis;
 using i18n.Domain.Abstract;
 using i18n.Domain.Concrete;
+using i18n.Helpers;
 
 namespace i18n
 {
@@ -11,20 +12,26 @@ namespace i18n
     {
         private static object syncRoot = new object();
         private Lazy<POTranslationRepository> translationRepository;
-        private IUrlLocalizer urlLocalizer;
         private Lazy<TextLocalizer> textLocalizer;
-        private IEarlyUrlLocalizer earlyUrlLocalizer;
         private Lazy<NuggetLocalizer> nuggetLocalizer;
 
-        public DefaultRootServices()
+        public DefaultRootServices(string environment, RedisContext redisContext)
         {
+            if (string.IsNullOrEmpty(environment))
+            {
+                throw new ArgumentNullException(nameof(environment));
+            }
+
+            if (redisContext == null)
+            {
+                throw new ArgumentNullException(nameof(redisContext));
+            }
+
             // Use Lazy to delay the creation of objects to when a request is being processed.
             // When initializing the app thehi may throw "Request is not available in this context" from WebConfigService
-            translationRepository = new Lazy<POTranslationRepository>(() => new POTranslationRepository(new i18nSettings(new WebConfigSettingService())));
-            urlLocalizer = new UrlLocalizer();
-            textLocalizer = new Lazy<TextLocalizer>(() => new TextLocalizer(new i18nSettings(new WebConfigSettingService()), TranslationRepositoryForApp));
-            earlyUrlLocalizer = new EarlyUrlLocalizer(urlLocalizer);
-            nuggetLocalizer = new Lazy<NuggetLocalizer>(() => new NuggetLocalizer(new i18nSettings(new WebConfigSettingService()), TextLocalizerForApp));
+            translationRepository = new Lazy<POTranslationRepository>(() => new POTranslationRepository(new i18nSettings(new DictionaryConfigSettingService())));
+            textLocalizer = new Lazy<TextLocalizer>(() => new TextLocalizer(environment, redisContext, new i18nSettings(new DictionaryConfigSettingService()), TranslationRepositoryForApp));
+            nuggetLocalizer = new Lazy<NuggetLocalizer>(() => new NuggetLocalizer(new i18nSettings(new DictionaryConfigSettingService()), TextLocalizerForApp));
         }
 
         #region [IRootServices]
@@ -36,13 +43,7 @@ namespace i18n
                 return translationRepository.Value;
             }
         }
-        public IUrlLocalizer UrlLocalizerForApp
-        {
-            get
-            {
-                return urlLocalizer;
-            }
-        }
+
         public ITextLocalizer TextLocalizerForApp
         {
             get
@@ -50,13 +51,7 @@ namespace i18n
                 return textLocalizer.Value;
             }
         }
-        public IEarlyUrlLocalizer EarlyUrlLocalizerForApp
-        {
-            get
-            {
-                return earlyUrlLocalizer;
-            }
-        }
+
         public INuggetLocalizer NuggetLocalizerForApp
         {
             get
@@ -78,9 +73,7 @@ namespace i18n
         #region [IRootServices]
 
         public ITranslationRepository TranslationRepositoryForApp { get { return RootServices.TranslationRepositoryForApp; } }
-        public IUrlLocalizer UrlLocalizerForApp { get { return RootServices.UrlLocalizerForApp; } }
         public ITextLocalizer TextLocalizerForApp { get { return RootServices.TextLocalizerForApp; } }
-        public IEarlyUrlLocalizer EarlyUrlLocalizerForApp { get { return RootServices.EarlyUrlLocalizerForApp; } }
         public INuggetLocalizer NuggetLocalizerForApp { get { return RootServices.NuggetLocalizerForApp; } }
 
         #endregion
@@ -167,7 +160,7 @@ namespace i18n
         /// </summary>
         /// <param name="context">Current http context.</param>
         /// <param name="langtag">Language being set.</param>
-        public delegate void SetLanguageHandler(System.Web.HttpContextBase context, ILanguageTag langtag);
+        public delegate void SetLanguageHandler(ILanguageTag langtag);
 
         /// <summary>
         /// Describes one or more procedures to be called when the principal application
@@ -199,7 +192,7 @@ namespace i18n
         /// <returns>
         /// Modified message string (or message if no modification).
         /// </returns>
-        public delegate string TweakMessageTranslationProc(System.Web.HttpContextBase context, Nugget nugget, LanguageTag langtag, string message);
+        public delegate string TweakMessageTranslationProc(Nugget nugget, LanguageTag langtag, string message);
 
         /// <summary>
         /// Registers a custom method called after a nugget has been translated
@@ -257,7 +250,7 @@ namespace i18n
         /// </remarks>
         public string AsyncPostbackTypesToTranslate = "updatePanel,scriptStartupBlock,pageTitle";
 
-        public LocalizedApplication(IRootServices i_RootServices = null)
+        public LocalizedApplication(IRootServices i_RootServices = null, string environment = null, RedisContext redisContext = null)
         {
 
             // Default settings.
@@ -266,30 +259,19 @@ namespace i18n
             MessageKeyIsValueInDefaultLanguage = true;
             PermanentRedirects = false;
 
-            // Attempt to determine ApplicationPath.
-            // NB: if this method being called outside of a request handler, HttpContext.Current
-            // fails. Normally, this results in a null being returned; however it has been observed
-            // that it can also throw.
-            try
-            {
-                var mycontext = System.Web.HttpContext.Current;
-                if (mycontext != null && mycontext.Request.ApplicationPath != null)
-                    ApplicationPath = mycontext.Request.ApplicationPath.TrimEnd('/');
-            }
-            catch (Exception) { }
-            if (String.IsNullOrWhiteSpace(ApplicationPath))
+            if (string.IsNullOrWhiteSpace(ApplicationPath))
             {
                 ApplicationPath = "/";
             }
 
             // Use default package of root services.
             // Host app may override this.
-            RootServices = i_RootServices ?? new DefaultRootServices();
+            RootServices = i_RootServices ?? new DefaultRootServices(environment, redisContext);
 
             // Install default handler for Set-PAL event.
             // The default handler applies the setting to both the CurrentCulture and CurrentUICulture
             // settings of the thread.
-            SetPrincipalAppLanguageForRequestHandlers = delegate(System.Web.HttpContextBase context, ILanguageTag langtag)
+            SetPrincipalAppLanguageForRequestHandlers = delegate(ILanguageTag langtag)
             {
                 if (langtag != null)
                 {
@@ -307,59 +289,6 @@ namespace i18n
         {
             get { return current ?? (current = new LocalizedApplication()); }
             set { current = value; }
-        }
-
-        /// <summary>
-        /// Conditionally installs the i18n response filter.
-        /// </summary>
-        /// <param name="context">The HttpContext context.</param>
-        public static void InstallResponseFilter(System.Web.HttpContextBase context)
-        {
-            InstallResponseFilter(context, null);
-        }
-
-        /// <summary>
-        /// Conditionally installs the i18n response filter.
-        /// </summary>
-        /// <param name="context">The HTTP context.</param>
-        /// <param name="rootServices">The root services.</param>
-        public static void InstallResponseFilter(System.Web.HttpContextBase context, IRootServices rootServices)
-        {
-            if (rootServices == null)
-            {
-                rootServices = Current.RootServices;
-            }
-
-            // If the content type of the entity is eligible for processing AND the URL is not to be excluded,
-            // wire up our filter to do the processing. The entity data will be run through the filter a
-            // bit later on in the pipeline.
-            if (Current.ContentTypesToLocalize != null
-                    && Current.ContentTypesToLocalize.Match(context.Response.ContentType).Success) // Include certain content types from being processed
-            {
-                if (Current.UrlsToExcludeFromProcessing != null
-                    && Current.UrlsToExcludeFromProcessing.Match(context.Request.RawUrl).Success) // Exclude certain URLs from being processed
-                {
-                    DebugHelpers.WriteLine("InstallResponseFilter -- Bypassing filter, URL excluded: ({0}).", context.Request.RawUrl);
-                }
-                else if (context.Response.Headers["Content-Encoding"] != null
-                    || context.Response.Headers["Content-Encoding"] == "gzip") // Exclude responses that have already been compressed earlier in the pipeline
-                {
-                    DebugHelpers.WriteLine("InstallResponseFilter -- Bypassing filter, response compressed.");
-                }
-                else
-                {
-                    DebugHelpers.WriteLine("InstallResponseFilter -- Installing filter");
-                    context.Response.Filter = new ResponseFilter(
-                        context,
-                        context.Response.Filter,
-                        UrlLocalizer.UrlLocalizationScheme == UrlLocalizationScheme.Void ? null : rootServices.EarlyUrlLocalizerForApp,
-                        rootServices.NuggetLocalizerForApp);
-                }
-            }
-            else
-            {
-                DebugHelpers.WriteLine("InstallResponseFilter -- Bypassing filter, No content-type match: ({0}).", context.Response.ContentType);
-            }
         }
 
         /// <summary>

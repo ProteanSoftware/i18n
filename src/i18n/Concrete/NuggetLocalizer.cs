@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
-using i18n.Helpers;
 using i18n.Domain.Concrete;
+using i18n.Helpers;
 
 namespace i18n
 {
@@ -32,48 +32,52 @@ namespace i18n
                 NuggetParser.Context.ResponseProcessing);
         }
 
-    #region [INuggetLocalizer]
+        #region [INuggetLocalizer]
 
         public string ProcessNuggets(string entity, LanguageItem[] languages)
         {
-           // Lookup any/all msgid nuggets in the entity and replace with any translated message.
-            string entityOut = _nuggetParser.ParseString(entity, delegate(string nuggetString, int pos, Nugget nugget, string i_entity)
+            // Lookup any/all msgid nuggets in the entity and replace with any translated message.
+            string entityOut = _nuggetParser.ParseString(entity, delegate (string nuggetString, int pos, Nugget nugget, string i_entity)
             {
-            // Formatted nuggets:
-            //
-            // A formatted nugget will be encountered here like this, say:
-            //
-            //    [[[Enter between %0 and %1 characters|||100|||6]]]
-            //
-            // while the original string in the code for this may have been:
-            //
-            //    [[[Enter between %0 and %1 characters|||{1}|||{2}]]]
-            //
-            // The canonical msgid part is that between the opening [[[ and the first |||:
-            //
-            //    Enter between %0 and %1 characters
-            //
-            // We use that for the lookup.
-            //
+                // Formatted nuggets:
+                //
+                // A formatted nugget will be encountered here like this, say:
+                //
+                //    [[[Enter between %0 and %1 characters|||100|||6]]]
+                //
+                // while the original string in the code for this may have been:
+                //
+                //    [[[Enter between %0 and %1 characters|||{1}|||{2}]]]
+                //
+                // The canonical msgid part is that between the opening [[[ and the first |||:
+                //
+                //    Enter between %0 and %1 characters
+                //
+                // We use that for the lookup.
+                //
                 LanguageTag lt;
                 string message;
-               // Check for unit-test caller.
-                if (_textLocalizer == null) {
-                    return "test.message"; }
-               // Lookup resource using canonical msgid.
+                // Check for unit-test caller.
+                if (_textLocalizer == null)
+                {
+                    return "test.message";
+                }
+                // Lookup resource using canonical msgid.
                 message = _textLocalizer.GetText(
                     true, // true = try lookup with HtmlDecoded-msgid if lookup with raw msgid fails.
                     nugget.MsgId,
                     nugget.Comment,
                     languages,
                     out lt);
-               //
-                if (nugget.IsFormatted) {
-                   // Convert any identifies in a formatted nugget: %0 -> {0}
+                //
+                if (nugget.IsFormatted)
+                {
+                    // Convert any identifies in a formatted nugget: %0 -> {0}
                     message = ConvertIdentifiersInMsgId(message);
-                   // Format the message.
+                    // Format the message.
                     var formatItems = new List<string>(nugget.FormatItems);
-                    try {
+                    try
+                    {
                         // translate nuggets in parameters 
                         for (int i = 0; i < formatItems.Count; i++)
                         {
@@ -86,22 +90,25 @@ namespace i18n
                             formatItems[i] = ProcessNuggets(fItem, languages);
                         }
 
-                        message = string.Format(message, formatItems.ToArray()); }
-                    catch (FormatException /*e*/) {
+                        message = string.Format(message, formatItems.ToArray());
+                    }
+                    catch (FormatException /*e*/)
+                    {
                         //message += string.Format(" [FORMAT EXCEPTION: {0}]", e.Message);
                         message += "[FORMAT EXCEPTION]";
                     }
                 }
-               // Optional late custom message translation modification.
-                if (LocalizedApplication.Current.TweakMessageTranslation != null) {
+                // Optional late custom message translation modification.
+                if (LocalizedApplication.Current.TweakMessageTranslation != null)
+                {
                     message = LocalizedApplication.Current.TweakMessageTranslation(
-                        System.Web.HttpContext.Current.GetHttpContextBase(),
                         nugget,
                         lt,
-                        message); }
-               // Output modified message (to be subsituted for original in the source entity).
+                        message);
+                }
+                // Output modified message (to be subsituted for original in the source entity).
                 DebugHelpers.WriteLine("I18N.NuggetLocalizer.ProcessNuggets -- msgid: {0,35}, message: {1}", nugget.MsgId, message);
-               //
+                //
                 if (_settings.VisualizeMessages)
                 {
                     string languageToken = string.Empty;
@@ -113,16 +120,16 @@ namespace i18n
                     message = string.Format("{0}{1}{2}{3}", _settings.NuggetVisualizeToken, languageToken, message, endToken);
                 }
                 return message;
-                    // NB: this was originally returning HttpUtility.HtmlEncode(message).
-                    // Ref #105 and #202 as to why changed back to returning message as is.
+                // NB: this was originally returning HttpUtility.HtmlEncode(message).
+                // Ref #105 and #202 as to why changed back to returning message as is.
             });
-           // Return modified entity.
+            // Return modified entity.
             return entityOut;
         }
 
-    #endregion
+        #endregion
 
-    // Helpers
+        // Helpers
 
         /// <summary>
         /// Returns indication of whether the passed nugget is formatted or not.
@@ -153,23 +160,25 @@ namespace i18n
         public static string ConvertIdentifiersInMsgId(string msgid)
         {
             // Convert %n style identifiers to {n} style.
-            return m_regexPrintfIdentifiers.Replace(msgid, delegate(Match match)
+            return m_regexPrintfIdentifiers.Replace(msgid, delegate (Match match)
             {
                 string s = match.Groups[1].Value;
                 double id;
-                if (ParseHelpers.TryParseDecimal(s, 1, s.Length -1 +1, out id)) {
-                    s = string.Format("{{{0}}}", id); }
+                if (ParseHelpers.TryParseDecimal(s, 1, s.Length - 1 + 1, out id))
+                {
+                    s = string.Format("{{{0}}}", id);
+                }
                 return s;
             });
         }
 
-    // Implementation
+        // Implementation
 
         /// <summary>
         /// Regex for helping replace %0 style identifiers with {0} style ones.
         /// </summary>
         protected static Regex m_regexPrintfIdentifiers = new Regex(
-            @"(%\d+)", 
+            @"(%\d+)",
             RegexOptions.CultureInvariant);
 
         /// <summary>

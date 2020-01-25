@@ -1,12 +1,13 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
+using CachingFramework.Redis;
 using i18n.Domain.Abstract;
-using i18n.Domain.Entities;
 using i18n.Domain.Concrete;
+using i18n.Domain.Entities;
 using i18n.Helpers;
 
 namespace i18n
@@ -20,54 +21,65 @@ namespace i18n
 
         private ITranslationRepository _translationRepository;
 
+        private readonly RedisContext redisContext;
+
+        private readonly string environment;
+
         private static Regex unicodeMatchRegex = new Regex(@"\\U(?<Value>[0-9A-F]{4})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         public TextLocalizer(
+            string environment,
+            RedisContext redisContext,
             i18nSettings settings,
             ITranslationRepository translationRepository)
         {
+            this.environment = environment;
+            this.redisContext = redisContext;
             _settings = settings;
             _translationRepository = translationRepository;
         }
 
 
-    #region [ITextLocalizer]
+        #region [ITextLocalizer]
 
         public virtual ConcurrentDictionary<string, LanguageTag> GetAppLanguages()
         {
-            ConcurrentDictionary<string, LanguageTag> AppLanguages = (ConcurrentDictionary<string, LanguageTag>)System.Web.HttpRuntime.Cache["i18n.AppLanguages"];
-            if (AppLanguages != null) {
-                return AppLanguages; }
+            ConcurrentDictionary<string, LanguageTag> AppLanguages = redisContext.Cache.GetObject<ConcurrentDictionary<string, LanguageTag>>("i18n.AppLanguages");
+            if (AppLanguages != null)
+            {
+                return AppLanguages;
+            }
             lock (Sync)
             {
-                AppLanguages = (ConcurrentDictionary<string, LanguageTag>)System.Web.HttpRuntime.Cache["i18n.AppLanguages"];
-                if (AppLanguages != null) {
-                    return AppLanguages; }
+                AppLanguages = redisContext.Cache.GetObject<ConcurrentDictionary<string, LanguageTag>>("i18n.AppLanguages");
+                if (AppLanguages != null)
+                {
+                    return AppLanguages;
+                }
+
                 AppLanguages = new ConcurrentDictionary<string, LanguageTag>();
 
-               // Insert into cache.
-               // NB: we do this before actually populating the collection. This is so that any changes to the
-               // folders before we finish populating the collection will cause the cache item to be invalidated
-               // and hence reloaded on next request, and so will not be missed.
-                System.Web.HttpRuntime.Cache.Insert("i18n.AppLanguages", AppLanguages, _translationRepository.GetCacheDependencyForAllLanguages());
-
-               // Populate the collection.
+                // Populate the collection.
                 List<string> languages = _translationRepository.GetAvailableLanguages().Select(x => x.LanguageShortTag).ToList();
 
                 // Ensure default language is included in AppLanguages where appropriate.
                 if (LocalizedApplication.Current.MessageKeyIsValueInDefaultLanguage
-                    && !languages.Any(x => LocalizedApplication.Current.DefaultLanguageTag.Equals(x))) {
-                    languages.Add(LocalizedApplication.Current.DefaultLanguageTag.ToString()); }
+                    && !languages.Any(x => LocalizedApplication.Current.DefaultLanguageTag.Equals(x)))
+                {
+                    languages.Add(LocalizedApplication.Current.DefaultLanguageTag.ToString());
+                }
 
                 foreach (var langtag in languages)
                 {
                     if (IsLanguageValid(langtag))
                     {
-                        AppLanguages[langtag] = LanguageTag.GetCachedInstance(langtag); 
+                        AppLanguages[langtag] = LanguageTag.GetCachedInstance(langtag);
                     }
                 }
 
-               // Done.
+                redisContext.Cache.SetObject("i18n.AppLanguages", AppLanguages);
+
+                // Done.
                 return AppLanguages;
             }
         }
@@ -75,32 +87,37 @@ namespace i18n
         public virtual string GetText(string msgid, string msgcomment, LanguageItem[] languages, out LanguageTag o_langtag, int maxPasses = -1)
         {
             // Validate arguments.
-            if (maxPasses > (int)LanguageTag.MatchGrade._MaxMatch +1) { 
-                maxPasses = (int)LanguageTag.MatchGrade._MaxMatch +1; }
+            if (maxPasses > (int)LanguageTag.MatchGrade._MaxMatch + 1)
+            {
+                maxPasses = (int)LanguageTag.MatchGrade._MaxMatch + 1;
+            }
             // Init.
-            bool fallbackOnDefault = maxPasses == (int)LanguageTag.MatchGrade._MaxMatch +1
+            bool fallbackOnDefault = maxPasses == (int)LanguageTag.MatchGrade._MaxMatch + 1
                 || maxPasses == -1;
             // Determine the key for the msg lookup. This may be either msgid or msgid+msgcomment, depending on the prevalent
             // MessageContextEnabledFromComment setting.
-            string msgkey = msgid == null ? 
-                msgid:
+            string msgkey = msgid == null ?
+                msgid :
                 TemplateItem.KeyFromMsgidAndComment(msgid, msgcomment, _settings.MessageContextEnabledFromComment);
             // Perform language matching based on UserLanguages, AppLanguages, and presence of
             // resource under msgid for any particular AppLanguage.
             string text;
             o_langtag = LanguageMatching.MatchLists(
-                languages, 
-                GetAppLanguages().Values, 
-                msgkey, 
-                TryGetTextFor, 
-                out text, 
+                languages,
+                GetAppLanguages().Values,
+                msgkey,
+                TryGetTextFor,
+                out text,
                 Math.Min(maxPasses, (int)LanguageTag.MatchGrade._MaxMatch));
             // If match was successfull
-            if (text != null) {
+            if (text != null)
+            {
                 // If the msgkey was returned...don't output that but rather the msgid as the msgkey
                 // may be msgid+msgcomment.
-                if (text == msgkey) {
-                    return msgid; }                
+                if (text == msgkey)
+                {
+                    return msgid;
+                }
                 return text;
             }
             // Optionally try default language.
@@ -113,7 +130,7 @@ namespace i18n
             return null;
         }
 
-    #endregion
+        #endregion
 
         internal readonly object Sync = new object();
 
@@ -124,17 +141,21 @@ namespace i18n
         /// <returns>true if one or more localized messages exist for the language; otherwise false.</returns>
         private bool IsLanguageValid(string langtag)
         {
-        // Note that there is no need to serialize access to System.Web.HttpRuntime.Cache when just reading from it.
-        //
-            if (!langtag.IsSet()) {
-                return false; }
+            // Note that there is no need to serialize access to System.Web.HttpRuntime.Cache when just reading from it.
+            //
+            if (!langtag.IsSet())
+            {
+                return false;
+            }
 
             // Default language is always valid.
             if (LocalizedApplication.Current.MessageKeyIsValueInDefaultLanguage
-                && LocalizedApplication.Current.DefaultLanguageTag.Equals(langtag)) {
-                return true; }
+                && LocalizedApplication.Current.DefaultLanguageTag.Equals(langtag))
+            {
+                return true;
+            }
 
-            ConcurrentDictionary<string, TranslationItem> messages = (ConcurrentDictionary<string, TranslationItem>)System.Web.HttpRuntime.Cache[GetCacheKey(langtag)];
+            ConcurrentDictionary<string, TranslationItem> messages = redisContext.Cache.GetObject<ConcurrentDictionary<string, TranslationItem>>(GetCacheKey(langtag));
 
             // If messages not yet loaded in for the language
             if (messages == null)
@@ -166,13 +187,17 @@ namespace i18n
         private string TryGetTextFor(string langtag, string msgkey)
         {
             // If no messages loaded for language...fail.
-            if (!IsLanguageValid(langtag)) {
-                return null; }
+            if (!IsLanguageValid(langtag))
+            {
+                return null;
+            }
 
             // If not testing for a specific message, that is just testing whether any messages 
             // are present...return positive.
-            if (msgkey == null) {
-                return ""; }   
+            if (msgkey == null)
+            {
+                return "";
+            }
 
             // Lookup specific message text in the language PO and if found...return that.
             string text = LookupText(langtag, msgkey);
@@ -188,14 +213,18 @@ namespace i18n
                 text = LookupText(langtag, msgkeyClean);
             }
 
-            if (text != null) {
-                return text; }
+            if (text != null)
+            {
+                return text;
+            }
 
             // If we are looking up in the default language, and the message keys describe values
             // in that language...return the msgkey.
             if (LocalizedApplication.Current.DefaultLanguageTag.Equals(langtag)
-                && LocalizedApplication.Current.MessageKeyIsValueInDefaultLanguage) {
-                return msgkey; }
+                && LocalizedApplication.Current.MessageKeyIsValueInDefaultLanguage)
+            {
+                return msgkey;
+            }
 
             // Lookup failed.
             return null;
@@ -208,55 +237,41 @@ namespace i18n
                 // It is possible for multiple threads to race to this method. The first to
                 // enter the above lock will insert the messages into the cache.
                 // If we lost the race...no need to duplicate the work of the winning thread.
-                if (System.Web.HttpRuntime.Cache[GetCacheKey(langtag)] != null)
+                if (redisContext.Cache.GetObject<ConcurrentDictionary<string, TranslationItem>>(GetCacheKey(langtag)) != null)
                 {
                     return true;
                 }
 
                 Translation t = _translationRepository.GetTranslation(langtag);
 
-                // Cache messages.
-                // · In order to facilitate dynamic refreshing of translations during runtime
-                //   (without restarting the server instance) we first establish something upon 
-                //   which the cache entry will be dependent: that is a 'cache dependency' object
-                //   which essentially triggers an event if/when the entry is to be considered
-                //   as 'dirty' and whihc is listened to by the cache.
-                //   In our case, we want this 'dirty' event to be triggered if/when the
-                //   translation's source PO file is updated.
-                //   NB: it is possible for GetCacheDependencyForSingleLanguage to return null in the
-                //   case of the default language where it is added to AppLanguages yet there 
-                //   doesn't actually exist an underlying PO file. This is perfectly valid when
-                //   LocalizedApplication.MessageKeyIsValueInDefaultLanguage == true (default setting).
-                //   In this case the cache entry is associated with the null CacheDependency instance
-                //   which means the cache entry is effectively permanent for this server instance.
-                System.Web.Caching.CacheDependency cd = _translationRepository.GetCacheDependencyForSingleLanguage(langtag);
-                // · Insert translation into cache associating it with any CacheDependency.
-                System.Web.HttpRuntime.Cache.Insert(GetCacheKey(langtag), t.Items, cd);
+                redisContext.Cache.SetObject(GetCacheKey(langtag), t.Items);
             }
             return true;
         }
 
-       /// <returns>null if not found.</returns>
+        /// <returns>null if not found.</returns>
         private string LookupText(string langtag, string msgkey)
         {
-        // Note that there is no need to serialize access to System.Web.HttpRuntime.Cache when just reading from it.
-        //
-            var messages = (ConcurrentDictionary<string, TranslationItem>) System.Web.HttpRuntime.Cache[GetCacheKey(langtag)];
+            // Note that there is no need to serialize access to System.Web.HttpRuntime.Cache when just reading from it.
+            //
+            var messages = redisContext.Cache.GetObject<ConcurrentDictionary<string, TranslationItem>>(GetCacheKey(langtag));
             TranslationItem message = null;
 
             //we need to populate the cache
             if (messages == null)
             {
                 LoadMessagesIntoCache(langtag);
-                messages = (ConcurrentDictionary<string, TranslationItem>)System.Web.HttpRuntime.Cache[GetCacheKey(langtag)];
+                messages = redisContext.Cache.GetObject<ConcurrentDictionary<string, TranslationItem>>(GetCacheKey(langtag));
             }
 
-           // Normalize any CRLF in the msgid i.e. to just LF.
-           // PO only support LF so we expect strings to be stored in the repo in that form.
-           // NB: we test Contains before doing Replace in case string.Replace allocs a new
-           // string even on no change. (This method is called very often.)
-            if (msgkey.Contains("\r\n")) {
-                msgkey = msgkey.Replace("\r\n", "\n"); }
+            // Normalize any CRLF in the msgid i.e. to just LF.
+            // PO only support LF so we expect strings to be stored in the repo in that form.
+            // NB: we test Contains before doing Replace in case string.Replace allocs a new
+            // string even on no change. (This method is called very often.)
+            if (msgkey.Contains("\r\n"))
+            {
+                msgkey = msgkey.Replace("\r\n", "\n");
+            }
 
             if (messages == null
                 || !messages.TryGetValue(msgkey, out message)
@@ -271,33 +286,38 @@ namespace i18n
         /// <returns>null if not found.</returns>
         private static CultureInfo GetCultureInfoFromLanguage(string language)
         {
-        // TODO: replace usage of CultureInfo with the LanguageTag class.
-        // This method and the use of CultureInfo is now surpassed by the LanguageTag class,
-        // thus making this method of handling language tags redundant.
-        //
-            if (string.IsNullOrWhiteSpace(language)) {
-                return null; }
-            try {
+            // TODO: replace usage of CultureInfo with the LanguageTag class.
+            // This method and the use of CultureInfo is now surpassed by the LanguageTag class,
+            // thus making this method of handling language tags redundant.
+            //
+            if (string.IsNullOrWhiteSpace(language))
+            {
+                return null;
+            }
+            try
+            {
                 var semiColonIndex = language.IndexOf(';');
                 language = semiColonIndex > -1 ? language.Substring(0, semiColonIndex) : language;
                 language = System.Globalization.CultureInfo.CreateSpecificCulture(language).Name;
                 return new CultureInfo(language, true);
             }
-            catch (Exception) {
-                return null; }
+            catch (Exception)
+            {
+                return null;
+            }
         }
 
-        private static string GetCacheKey(string langtag)
+        private string GetCacheKey(string langtag)
         {
             //return string.Format("po:{0}", langtag).ToLowerInvariant();
-                // The above will cause a new string to be allocated.
-                // So subsituted with the following code.
+            // The above will cause a new string to be allocated.
+            // So subsituted with the following code.
 
             // Obtain the cache key without allocating a new string (except for first time).
             // As this method is a high-frequency method, the overhead in the (lock-free) dictionary 
             // lookup is thought to outweigh the potentially large number of temporary string allocations
             // and the consequently hastened garbage collections.
-            return LanguageTag.GetCachedInstance(langtag).GlobalKey;
+            return environment + "." + LanguageTag.GetCachedInstance(langtag).GlobalKey;
         }
     }
 }
