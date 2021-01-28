@@ -1,9 +1,13 @@
 using System;
-using System.Threading;
 using System.Text.RegularExpressions;
-using i18n.Helpers;
+using System.Threading;
+using System.Web.Configuration;
+using CachingFramework.Redis;
 using i18n.Domain.Abstract;
 using i18n.Domain.Concrete;
+using i18n.Helpers;
+using Newtonsoft.Json;
+using JsonSerializer = CachingFramework.Redis.Serializers.JsonSerializer;
 
 namespace i18n
 {
@@ -15,14 +19,18 @@ namespace i18n
         private Lazy<TextLocalizer> textLocalizer;
         private IEarlyUrlLocalizer earlyUrlLocalizer;
         private Lazy<NuggetLocalizer> nuggetLocalizer;
+        private readonly RedisContext redisContext;
 
         public DefaultRootServices()
         {
             // Use Lazy to delay the creation of objects to when a request is being processed.
             // When initializing the app thehi may throw "Request is not available in this context" from WebConfigService
+
+
+            redisContext = new RedisContext(WebConfigurationManager.AppSettings["RedisConnection"], new JsonSerializer(new JsonSerializerSettings { Formatting = Formatting.None }));
             translationRepository = new Lazy<POTranslationRepository>(() => new POTranslationRepository(new i18nSettings(new WebConfigSettingService())));
             urlLocalizer = new UrlLocalizer();
-            textLocalizer = new Lazy<TextLocalizer>(() => new TextLocalizer(new i18nSettings(new WebConfigSettingService()), TranslationRepositoryForApp));
+            textLocalizer = new Lazy<TextLocalizer>(() => new TextLocalizer(WebConfigurationManager.AppSettings["Environment"], redisContext, new i18nSettings(new WebConfigSettingService()), TranslationRepositoryForApp));
             earlyUrlLocalizer = new EarlyUrlLocalizer(urlLocalizer);
             nuggetLocalizer = new Lazy<NuggetLocalizer>(() => new NuggetLocalizer(new i18nSettings(new WebConfigSettingService()), TextLocalizerForApp));
         }
@@ -119,8 +127,10 @@ namespace i18n
             set
             {
                 LanguageTag defaultLanguageTag = LanguageTag.GetCachedInstance(value);
-                if (defaultLanguageTag != null) {
-                    DefaultLanguageTag = defaultLanguageTag; }
+                if (defaultLanguageTag != null)
+                {
+                    DefaultLanguageTag = defaultLanguageTag;
+                }
             }
         }
         public LanguageTag DefaultLanguageTag { get; private set; }
@@ -289,7 +299,7 @@ namespace i18n
             // Install default handler for Set-PAL event.
             // The default handler applies the setting to both the CurrentCulture and CurrentUICulture
             // settings of the thread.
-            SetPrincipalAppLanguageForRequestHandlers = delegate(System.Web.HttpContextBase context, ILanguageTag langtag)
+            SetPrincipalAppLanguageForRequestHandlers = delegate (System.Web.HttpContextBase context, ILanguageTag langtag)
             {
                 if (langtag != null)
                 {

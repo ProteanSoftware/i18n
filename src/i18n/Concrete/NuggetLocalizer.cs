@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
-using i18n.Helpers;
 using i18n.Domain.Concrete;
+using i18n.Helpers;
 
 namespace i18n
 {
@@ -61,6 +61,8 @@ namespace i18n
                 if (_textLocalizer == null) {
                     return "test.message"; }
                // Lookup resource using canonical msgid.
+               DebugHelpers.WriteLine($"{nameof(NuggetLocalizer)}::{nameof(ProcessNuggets)} - {nugget.MsgId} - {nugget.Comment}");
+
                 message = _textLocalizer.GetText(
                     true, // true = try lookup with HtmlDecoded-msgid if lookup with raw msgid fails.
                     nugget.MsgId,

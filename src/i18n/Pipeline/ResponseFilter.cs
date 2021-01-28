@@ -121,6 +121,8 @@ namespace i18n
                 }
                 //if async postback
                 if (page != null && page.IsPostBack && isScriptManager && !String.IsNullOrEmpty(entity) && !String.IsNullOrEmpty(entity.Replace("\r","").Split('\n')[0])) { //#178
+                    DebugHelpers.WriteLine("ResponseFilter::Flush -- page");
+
                     var asyncPostbackParser = new AsyncPostbackParser(entity);
                     var types = LocalizedApplication.Current.AsyncPostbackTypesToTranslate.Split(new char[] {','});
                     foreach (var type in types) {
@@ -132,9 +134,14 @@ namespace i18n
                     }
                     entity = asyncPostbackParser.ToString();
                 } else {
+                    DebugHelpers.WriteLine("ResponseFilter::Flush -- entity-pre - {0}", entity);
+
                     entity = m_nuggetLocalizer.ProcessNuggets(
                         entity,
                         m_httpContext.GetRequestUserLanguages());
+
+                    DebugHelpers.WriteLine("ResponseFilter::Flush -- entity-post - {0}", entity);
+
                 }
             }
 
@@ -206,6 +213,8 @@ namespace i18n
         public override void WriteByte(byte value) { DebugHelpers.WriteLine("ResponseFilter::WriteByte"); m_outputStream.WriteByte(value); }
 
         protected override void Dispose(bool disposing) { DebugHelpers.WriteLine("ResponseFilter::Dispose"); base.Dispose(disposing); }
+
+        [Obsolete("Do not call or override this method.")]
         protected override void ObjectInvariant() { DebugHelpers.WriteLine("ResponseFilter::ObjectInvariant"); base.ObjectInvariant(); }
 
     #endregion
