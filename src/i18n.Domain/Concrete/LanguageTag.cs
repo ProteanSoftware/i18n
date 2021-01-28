@@ -124,34 +124,58 @@ namespace i18n
         /// <summary>
         /// Mandatory Language subtag, or if CON fails then null.
         /// </summary>
-        public string Language { get; private set; }
+        public string Language { get; set; }
         /// <summary>
         /// Optional Script subtag.
         /// </summary>
-        public string Script { get; private set; }
+        public string Script { get; set; }
         /// <summary>
         /// Optional Region subtag.
         /// </summary>
-        public string Region { get; private set; }
+        public string Region { get; set; }
         /// <summary>
         /// Optional PrivateUse subtag, excluding the "x-" part. 
         /// E.g. for a langtag of "en-GB-x-ACMECorp" this property is "ACMECorp".
         /// </summary>
-        public string PrivateUse { get; private set; }
+        public string PrivateUse { get; set; }
         /// <summary>
         /// Unique string per language which is suitable for using as a key in global
         /// caches such as HttpRuntime.Cache. Inited during construction.
         /// </summary>
-        public string GlobalKey { get; private set; }
+        public string GlobalKey { get; set; }
+
         /// <summary>
         /// Corresponding CultureInfo instance, or null if the langtag is unsupported on this system.
         /// </summary>
-        public CultureInfo CultureInfo { get; private set; }
+        public CultureInfo CultureInfo
+        {
+            get
+            {
+                return m_CultureInfo;
+            }
+            set
+            {
+                m_CultureInfo = value;
+
+                if (m_langtag == null)
+                {
+                    m_langtag = value.Name;
+                }
+
+                if (m_langtagLC == null)
+                {
+                    m_langtagLC = value.Name.ToLower();
+                }
+            }
+
+        }
+
+        private CultureInfo m_CultureInfo;
         /// <summary>
         /// If the system supports a cultureinfo object for the language, this is the native name of 
         /// the language suitable for user display, otherwise it is the language tag string.
         /// </summary>
-        public string NativeNameTitleCase { get; private set; }
+        public string NativeNameTitleCase { get; set; }
 
         /// <summary>
         /// Constructor for deserialization
